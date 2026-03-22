@@ -1,0 +1,14 @@
+# Note: torch is typically installed from the matching CUDA wheel index for your system.
+
+vllm==0.16.0
+transformers>=4.55,<4.60
+accelerate>=1.8,<2.0
+bitsandbytes>=0.45,<0.50
+fastapi>=0.115,<1.0
+uvicorn>=0.34,<1.0
+gradio>=5.0,<6.0
+tqdm>=4.66,<5.0
+ipywidgets>=8.1,<9.0
+matplotlib>=3.9,<4.0
+pandas>=2.2,<3.0
+numpy>=2.0,<3.0

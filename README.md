@@ -3,7 +3,7 @@
 
 > This work presents a systems-focused benchmarking study comparing HuggingFace Transformers and vLLM on NVIDIA H100 PCIe hardware, evaluating latency, throughput scaling, KV cache efficiency, and GPU utilization under controlled experimental conditions.  
 > We quantify the impact of continuous batching and PagedAttention on modern Hopper (SM90) architecture.  
-> Results provide reproducible insights into production-grade LLM inference optimization.
+> Results provide reproducible insights when run with fixed seeds and deterministic decode settings.
 
 ---
 
@@ -235,31 +235,53 @@ aligns closely with Hopper’s execution model, improving overall inference effi
 ## 8. Installation
 
 ```bash
-pip install torch torchvision torchaudio
-pip install vllm transformers accelerate
-pip install bitsandbytes fastapi uvicorn gradio tqdm
-pip install matplotlib pandas ipywidgets
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
+
+If you need a specific CUDA wheel for PyTorch on your system, install that wheel first,
+then run `pip install -r requirements.txt`.
 
 ---
 
-## 9. Reproducibility
+## 9. Quick Run (Deterministic)
+
+Validate the environment:
+
+```bash
+python validate_setup.py
+```
+
+Run the benchmark and export CSV:
+
+```bash
+python run_benchmark.py --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv
+```
+
+The notebook `vLLM.ipynb` is also updated to use deterministic settings and the same dependency file.
+
+---
+
+## 10. Reproducibility
 
 Steps:
 
-1. Load TinyLlama model  
-2. Initialize HuggingFace baseline  
-3. Initialize vLLM engine  
-4. Execute latency benchmarks  
-5. Run batch scaling experiments  
-6. Export CSV results  
-7. Generate scaling visualizations  
+1. Set the same seed for Python, NumPy, and PyTorch.
+2. Use greedy/de-determinized-off decoding (`do_sample=False` for HF, `temperature=0.0` for vLLM).
+3. Load TinyLlama model.
+4. Initialize HuggingFace baseline.
+5. Initialize vLLM engine.
+6. Execute latency and throughput benchmarks.
+7. Export CSV results.
+8. Generate scaling visualizations.
 
-All experiments are deterministic and reproducible.
+With those controls, repeated runs should be statistically stable on the same hardware/software stack.
 
 ---
 
-## 10. Conclusion
+## 11. Conclusion
 
 This study demonstrates that:
 
@@ -272,7 +294,7 @@ For production-grade LLM serving, vLLM provides measurable systems-level advanta
 
 ---
 
-## 11. Future Directions
+## 12. Future Directions
 
 - Multi-GPU tensor parallel benchmarking  
 - BF16 vs FP16 comparison on Hopper  
