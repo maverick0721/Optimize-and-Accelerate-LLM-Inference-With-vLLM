@@ -2,10 +2,18 @@
 """Deterministic benchmark runner for HF vs vLLM TinyLlama inference."""
 
 import argparse
+import logging
 import os
 import random
 import time
+import warnings
 from dataclasses import dataclass
+
+# Set vLLM runtime behavior before importing vLLM.
+os.environ.setdefault("VLLM_USE_V1", "0")
+os.environ.setdefault("VLLM_V1_INPROC", "0")
+os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+os.environ.setdefault("GLOO_SOCKET_IFNAME", "lo")
 
 import numpy as np
 import pandas as pd
@@ -81,15 +89,10 @@ class HFRunner:
 
 class VLLMRunner:
     def __init__(self, model_name: str, tokenizer: AutoTokenizer, seed: int, max_tokens: int):
-        # Disable experimental V1 path for stability across systems.
-        os.environ["VLLM_USE_V1"] = "0"
-        os.environ["VLLM_V1_INPROC"] = "0"
-
         self.tokenizer = tokenizer
         self.llm = LLM(
             model=model_name,
             dtype="float16",
-            trust_remote_code=True,
             enforce_eager=True,
             disable_log_stats=True,
             gpu_memory_utilization=0.8,
@@ -131,9 +134,38 @@ class VLLMRunner:
         end = time.perf_counter()
         return len(prompts) / (end - start)
 
+    def shutdown(self) -> None:
+        shutdown = getattr(self.llm, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
+
 
 def gpu_peak_memory_mb() -> float:
     return torch.cuda.max_memory_allocated() / 1024**2
+
+
+def cleanup_distributed() -> None:
+    try:
+        import torch.distributed as dist
+
+        if dist.is_available() and dist.is_initialized():
+            dist.destroy_process_group()
+    except Exception:
+        pass
+
+
+def configure_logging(quiet: bool) -> None:
+    if not quiet:
+        return
+
+    os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["VLLM_LOGGING_LEVEL"] = "ERROR"
+
+    logging.getLogger().setLevel(logging.ERROR)
+    logging.getLogger("vllm").setLevel(logging.ERROR)
+    logging.getLogger("transformers").setLevel(logging.ERROR)
+    warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def run(args: argparse.Namespace) -> pd.DataFrame:
@@ -210,6 +242,8 @@ def run(args: argparse.Namespace) -> pd.DataFrame:
     df["vLLM Avg Tokens/sec"] = sum(vllm_tps) / len(vllm_tps)
     df["HF Peak Memory MB"] = hf_mem_peak
     df["vLLM Peak Memory MB"] = vllm_mem_peak
+    vllm.shutdown()
+    cleanup_distributed()
     return df
 
 
@@ -219,14 +253,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-new-tokens", type=int, default=100)
     parser.add_argument("--output", default="vllm_vs_hf_results.csv")
     parser.add_argument("--batch-sizes", nargs="+", type=int, default=[1, 4, 8, 16, 32])
+    parser.add_argument("--quiet", action="store_true", help="Reduce non-critical runtime logs")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    configure_logging(args.quiet)
     df = run(args)
     df.to_csv(args.output, index=False)
     print("Saved:", args.output)
+    cleanup_distributed()
 
 
 if __name__ == "__main__":

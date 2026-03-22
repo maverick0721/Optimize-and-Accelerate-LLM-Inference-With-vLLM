@@ -260,6 +260,39 @@ Run the benchmark and export CSV:
 python run_benchmark.py --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv
 ```
 
+Quieter run (suppresses most non-critical logs):
+
+```bash
+python run_benchmark.py --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
+```
+
+One-command flow (validate + benchmark):
+
+```bash
+./run_all.sh --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv
+```
+
+Full start-to-end launcher (setup + validate + run + presenter-friendly summary):
+
+```bash
+./start_project.sh
+```
+
+You can still pass benchmark args through it:
+
+```bash
+./start_project.sh --max-new-tokens 64 --output demo_results.csv
+```
+
+Or with quieter output:
+
+```bash
+./run_all.sh --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
+```
+
+`run_all.sh` forwards any benchmark arguments directly to `run_benchmark.py`.
+`start_project.sh` can also create `.venv` and install dependencies before running.
+
 The notebook `vLLM.ipynb` is also updated to use deterministic settings and the same dependency file.
 
 ---
