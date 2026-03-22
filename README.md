@@ -1,336 +1,199 @@
-# 🚀 Accelerating Large Language Model Inference with vLLM  
-### A Systems-Level Benchmark on NVIDIA H100 PCIe
+# Accelerating Large Language Model Inference with vLLM
+## A Systems-Level Benchmark of HF vs vLLM on CUDA GPUs
 
-> This work presents a systems-focused benchmarking study comparing HuggingFace Transformers and vLLM on NVIDIA H100 PCIe hardware, evaluating latency, throughput scaling, KV cache efficiency, and GPU utilization under controlled experimental conditions.  
-> We quantify the impact of continuous batching and PagedAttention on modern Hopper (SM90) architecture.  
-> Results provide reproducible insights when run with fixed seeds and deterministic decode settings.
+![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
+![CUDA](https://img.shields.io/badge/CUDA-12.8-76B900?logo=nvidia)
+![vLLM](https://img.shields.io/badge/vLLM-0.16.0-orange)
+![Transformers](https://img.shields.io/badge/Transformers-4.57-yellow)
+![Status](https://img.shields.io/badge/Status-Runnable-success)
 
----
+This project benchmarks HuggingFace Transformers and vLLM on modern NVIDIA GPUs,
+focusing on latency, tokens/sec, throughput scaling, and GPU memory behavior.
+It is designed for reproducible, deterministic comparisons with a one-command run path.
 
-## 1. Introduction
+## Why This Project
 
-As large language models transition from research prototypes to production systems, inference efficiency has become a primary bottleneck.
+Production inference systems need:
 
-Modern deployment constraints require:
+- Low end-to-end latency
+- High throughput under concurrent workloads
+- Stable GPU memory behavior
+- Predictable scaling as load increases
 
-- Low end-to-end latency  
-- High throughput under concurrent workloads  
-- Stable and predictable GPU memory behavior  
-- Efficient hardware utilization  
+vLLM targets these needs with continuous batching and PagedAttention.
+This repository shows how those design choices compare against a standard HuggingFace baseline.
 
-While HuggingFace provides a robust and flexible inference stack, it is not explicitly optimized for high-concurrency production serving.
+## At A Glance
 
-vLLM introduces architectural innovations designed to address these limitations:
-
-- Continuous batching
-- PagedAttention-based KV cache management
-- Optimized GPU scheduling
-
-This study evaluates the practical performance implications of these architectural differences on NVIDIA H100 PCIe hardware.
-
----
-
-## 2. Experimental Setup
-
-| Component | Specification |
-|------------|--------------|
-| GPU | NVIDIA H100 PCIe |
-| Architecture | Hopper (SM90) |
-| Memory | 80GB HBM3 |
+| Category | Value |
+|---|---|
+| Target Hardware | CUDA-capable NVIDIA GPUs |
+| Tested GPU in Workspace | NVIDIA RTX A6000 |
+| Model | TinyLlama/TinyLlama-1.1B-Chat-v1.0 |
 | Precision | FP16 |
-| Model | TinyLlama-1.1B-Chat |
-| Max Generation Tokens | 100 |
 | Batch Sizes | 1, 4, 8, 16, 32 |
+| Key Output | `vllm_vs_hf_results.csv` |
 
-All latency measurements were conducted using synchronized GPU timing:
+## Architecture Flow
+
+```mermaid
+flowchart LR
+       A[Input Prompt] --> B[Chat Template]
+       B --> C{Inference Backend}
+       C --> D[HuggingFace Generate]
+       C --> E[vLLM Engine]
+       E --> F[Scheduler + Continuous Batching]
+       F --> G[PagedAttention KV Cache]
+       D --> H[Decoded Output]
+       G --> H
+```
+
+## Benchmark Pipeline
+
+```mermaid
+flowchart TD
+       A[Setup Env] --> B[Validate Setup]
+       B --> C[Single Prompt Latency]
+       C --> D[Multi Prompt Average Latency]
+       D --> E[Tokens Per Second]
+       E --> F[Batch Throughput Scaling]
+       F --> G[Peak GPU Memory Comparison]
+       G --> H[Export CSV Results]
+```
+
+## What Is Measured
+
+1. Single-request latency and tokens/sec
+2. Average latency over multiple prompts
+3. Decoding throughput (tokens/sec)
+4. Batch throughput scaling across [1, 4, 8, 16, 32]
+5. Peak GPU memory usage comparison
+
+Latency timing is synchronized with CUDA to avoid async dispatch skew:
 
 ```python
-import time
 torch.cuda.synchronize()
 start = time.perf_counter()
-
 # inference call
-
 torch.cuda.synchronize()
-end = time.perf_counter()
-latency = end - start
+latency = time.perf_counter() - start
 ```
 
-This ensures accurate measurement of kernel execution time rather than asynchronous dispatch overhead.
+## Quick Start
 
----
+### Full One-Command Start (Recommended)
 
-## 3. Architectural Comparison
-
-### 3.1 HuggingFace Baseline
-
-```
-Prompt → Tokenizer → model.generate() → GPU → Output
+```bash
+./start_project.sh
 ```
 
-Characteristics:
+What this does:
 
-- Sequential request execution  
-- Static KV cache allocation  
-- No dynamic scheduling layer  
-- Limited batch scaling  
+- Creates `.venv` if needed
+- Installs dependencies
+- Validates environment
+- Runs deterministic benchmark
+- Prints a presenter-friendly summary
 
----
+### Pass Custom Args
 
-### 3.2 vLLM Inference Engine
-
-```
-Prompt → Scheduler → Continuous Batching
-       → PagedAttention → KV Cache Manager
-       → GPU Execution → Output
+```bash
+./start_project.sh --max-new-tokens 64 --output demo_results.csv
 ```
 
-Key differences:
+### Fast Path For Preconfigured Environments
 
-- Dynamic request aggregation  
-- Memory-paged KV cache to reduce fragmentation  
-- Improved GPU occupancy  
-- Reduced idle cycles during decoding  
-
----
-
-## 4. Benchmarks Conducted
-
-### 4.1 Single-Request Latency
-
-Measured:
-
-- End-to-end generation time  
-- Tokens generated  
-- Tokens per second  
-
----
-
-### 4.2 Average Latency Across Prompts
-
-Multiple prompts were evaluated to reduce variance and improve reliability.
-
----
-
-### 4.3 Decoding Throughput (Tokens/sec)
-
-```python
-tokens_per_second = generated_tokens / latency
+```bash
+./run_all.sh --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
 ```
 
-This isolates decoding performance from prompt formatting overhead.
+### Direct Benchmark Command
 
----
-
-### 4.4 Batch Throughput Scaling
-
-Batch sizes tested:
-
-```python
-[1, 4, 8, 16, 32]
+```bash
+python run_benchmark.py --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
 ```
 
-Throughput metric:
-
-```python
-throughput = batch_size / total_time
-```
-
-Comparison:
-
-- HuggingFace → Sequential loop execution  
-- vLLM → True batched decoding  
-
----
-
-### 4.5 GPU Memory Behavior
-
-Measured using:
-
-```python
-torch.cuda.memory_allocated()
-```
-
-Evaluated:
-
-- Allocation stability  
-- Fragmentation behavior  
-- Memory scaling under load  
-
----
-
-## 5. Observations
-
-### 5.1 Single Request
-
-On H100 hardware:
-
-- Latency differences between HF and vLLM are modest at batch size = 1  
-- Compute throughput of Hopper architecture minimizes small-scale differences  
-
----
-
-### 5.2 Tokens per Second
-
-vLLM consistently achieves higher decoding throughput due to:
-
-- Efficient KV cache reuse  
-- Reduced memory allocation overhead  
-- Higher GPU occupancy  
-
----
-
-### 5.3 Batch Scaling
-
-HuggingFace:
-
-- Throughput plateaus as batch increases  
-- Sequential execution limits scalability  
-
-vLLM:
-
-- Scales efficiently with batch size  
-- Maintains superior request throughput  
-- Better utilizes Hopper memory bandwidth  
-
----
-
-### 5.4 Memory Stability
-
-vLLM demonstrates:
-
-- Reduced fragmentation  
-- More stable allocation patterns  
-- Improved behavior under concurrent load  
-
----
-
-## 6. Why vLLM Aligns with Hopper Architecture
-
-The NVIDIA H100 (SM90) provides:
-
-- High memory bandwidth  
-- Larger L2 cache  
-- Optimized FP16 compute throughput  
-
-vLLM’s architectural design:
-
-- Continuous batching  
-- PagedAttention  
-- Optimized scheduling  
-
-aligns closely with Hopper’s execution model, improving overall inference efficiency.
-
----
-
-## 7. Outputs Generated
-
-- Throughput vs Batch Size plot  
-- CSV benchmark results (`vllm_vs_hf_results.csv`)  
-- Tokens/sec comparison  
-- Latency comparison  
-
----
-
-## 8. Installation
+## Setup (Manual)
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-If you need a specific CUDA wheel for PyTorch on your system, install that wheel first,
-then run `pip install -r requirements.txt`.
-
----
-
-## 9. Quick Run (Deterministic)
-
-Validate the environment:
-
-```bash
 python validate_setup.py
 ```
 
-Run the benchmark and export CSV:
+If your system requires a specific CUDA wheel for PyTorch, install that wheel first,
+then run `pip install -r requirements.txt`.
+
+## Reproducibility Notes
+
+Deterministic behavior is controlled by:
+
+- Fixed random seed
+- `do_sample=False` for HuggingFace
+- `temperature=0.0` for vLLM
+
+With consistent hardware/software, repeated runs should be statistically stable.
+
+## Expected Output (Example)
+
+After running:
 
 ```bash
-python run_benchmark.py --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv
+./start_project.sh --no-venv --skip-install --max-new-tokens 8 --batch-sizes 1 --output sample_results.csv --quiet
 ```
 
-Quieter run (suppresses most non-critical logs):
+You should see a summary similar to:
 
-```bash
-python run_benchmark.py --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
+```text
+SINGLE REQUEST
+HF Latency: 3.4389s
+vLLM Latency: 0.5150s
+HF Tokens/sec: 2.33
+vLLM Tokens/sec: 15.53
+
+AVERAGE LATENCY
+HF Avg Latency: 0.2745
+vLLM Avg Latency: 0.1637
+
+TOKENS PER SECOND
+HF Avg Tokens/sec: 29.17
+vLLM Avg Tokens/sec: 50.48
+
+GPU PEAK MEMORY (MB)
+HF Peak Memory: 2108.74
+vLLM Peak Memory: 2106.30
 ```
 
-One-command flow (validate + benchmark):
+And the output CSV will look like:
 
-```bash
-./run_all.sh --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv
+```csv
+Batch Size,HF Throughput,vLLM Throughput,HF Avg Latency,vLLM Avg Latency,HF Avg Tokens/sec,vLLM Avg Tokens/sec,HF Peak Memory MB,vLLM Peak Memory MB
+1,3.589560751742418,6.169958786372651,0.27451589247211816,0.16370287016034127,29.172838057318984,50.47738084682244,2108.7412109375,2106.30126953125
 ```
 
-Full start-to-end launcher (setup + validate + run + presenter-friendly summary):
+Note: exact values can vary slightly by GPU, driver, and background load.
 
-```bash
-./start_project.sh
-```
+## Outputs
 
-You can still pass benchmark args through it:
+- CSV benchmark file: `vllm_vs_hf_results.csv`
+- Notebook walkthrough: `vLLM.ipynb`
+- CLI benchmark runner: `run_benchmark.py`
+- Setup validator: `validate_setup.py`
+- Quick launcher: `run_all.sh`
+- Full launcher: `start_project.sh`
 
-```bash
-./start_project.sh --max-new-tokens 64 --output demo_results.csv
-```
+## Interpreting Results
 
-Or with quieter output:
+- If batch size is 1, HF and vLLM can look closer in latency.
+- As batch size grows, vLLM generally scales better in req/sec.
+- Tokens/sec improvements usually track better GPU occupancy and KV cache handling.
 
-```bash
-./run_all.sh --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
-```
+## Future Extensions
 
-`run_all.sh` forwards any benchmark arguments directly to `run_benchmark.py`.
-`start_project.sh` can also create `.venv` and install dependencies before running.
-
-The notebook `vLLM.ipynb` is also updated to use deterministic settings and the same dependency file.
-
----
-
-## 10. Reproducibility
-
-Steps:
-
-1. Set the same seed for Python, NumPy, and PyTorch.
-2. Use greedy/de-determinized-off decoding (`do_sample=False` for HF, `temperature=0.0` for vLLM).
-3. Load TinyLlama model.
-4. Initialize HuggingFace baseline.
-5. Initialize vLLM engine.
-6. Execute latency and throughput benchmarks.
-7. Export CSV results.
-8. Generate scaling visualizations.
-
-With those controls, repeated runs should be statistically stable on the same hardware/software stack.
-
----
-
-## 11. Conclusion
-
-This study demonstrates that:
-
-- vLLM significantly improves batch throughput under concurrent workloads  
-- Continuous batching increases GPU utilization  
-- PagedAttention improves KV cache memory stability  
-- On modern Hopper hardware, architectural alignment with GPU design materially impacts inference efficiency  
-
-For production-grade LLM serving, vLLM provides measurable systems-level advantages.
-
----
-
-## 12. Future Directions
-
-- Multi-GPU tensor parallel benchmarking  
-- BF16 vs FP16 comparison on Hopper  
-- FlashAttention vs PagedAttention evaluation  
-- Quantized inference benchmarking  
-- Concurrent API stress testing  
+- Multi-GPU tensor parallel benchmarks
+- BF16 vs FP16 comparisons
+- FlashAttention vs PagedAttention studies
+- Quantized inference experiments
+- API-level concurrent load testing
