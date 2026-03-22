@@ -11,7 +11,7 @@ This project benchmarks HuggingFace Transformers and vLLM on modern NVIDIA GPUs,
 focusing on latency, tokens/sec, throughput scaling, and GPU memory behavior.
 It is designed for reproducible, deterministic comparisons with a one-command run path.
 
-## Why This Project
+## Problem
 
 Production inference systems need:
 
@@ -20,10 +20,12 @@ Production inference systems need:
 - Stable GPU memory behavior
 - Predictable scaling as load increases
 
-vLLM targets these needs with continuous batching and PagedAttention.
-This repository shows how those design choices compare against a standard HuggingFace baseline.
+## Solution
 
-## At A Glance
+vLLM targets these needs with continuous batching and PagedAttention.
+This repository compares those design choices against a standard HuggingFace baseline using deterministic settings.
+
+### At A Glance
 
 | Category | Value |
 |---|---|
@@ -34,7 +36,9 @@ This repository shows how those design choices compare against a standard Huggin
 | Batch Sizes | 1, 4, 8, 16, 32 |
 | Key Output | `vllm_vs_hf_results.csv` |
 
-## Architecture Flow
+## Architecture
+
+### Inference Flow
 
 ```mermaid
 flowchart LR
@@ -48,7 +52,7 @@ flowchart LR
        G --> H
 ```
 
-## Benchmark Pipeline
+### Benchmark Flow
 
 ```mermaid
 flowchart TD
@@ -61,25 +65,7 @@ flowchart TD
        G --> H[Export CSV Results]
 ```
 
-## What Is Measured
-
-1. Single-request latency and tokens/sec
-2. Average latency over multiple prompts
-3. Decoding throughput (tokens/sec)
-4. Batch throughput scaling across [1, 4, 8, 16, 32]
-5. Peak GPU memory usage comparison
-
-Latency timing is synchronized with CUDA to avoid async dispatch skew:
-
-```python
-torch.cuda.synchronize()
-start = time.perf_counter()
-# inference call
-torch.cuda.synchronize()
-latency = time.perf_counter() - start
-```
-
-## Quick Start
+## Demo Command
 
 ### Full One-Command Start (Recommended)
 
@@ -113,7 +99,7 @@ What this does:
 python run_benchmark.py --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
 ```
 
-## Setup (Manual)
+### Setup (Manual)
 
 ```bash
 python -m venv .venv
@@ -126,7 +112,27 @@ python validate_setup.py
 If your system requires a specific CUDA wheel for PyTorch, install that wheel first,
 then run `pip install -r requirements.txt`.
 
-## Reproducibility Notes
+## Results
+
+### What Is Measured
+
+1. Single-request latency and tokens/sec
+2. Average latency over multiple prompts
+3. Decoding throughput (tokens/sec)
+4. Batch throughput scaling across [1, 4, 8, 16, 32]
+5. Peak GPU memory usage comparison
+
+Latency timing is synchronized with CUDA to avoid async dispatch skew:
+
+```python
+torch.cuda.synchronize()
+start = time.perf_counter()
+# inference call
+torch.cuda.synchronize()
+latency = time.perf_counter() - start
+```
+
+### Reproducibility Notes
 
 Deterministic behavior is controlled by:
 
@@ -136,7 +142,7 @@ Deterministic behavior is controlled by:
 
 With consistent hardware/software, repeated runs should be statistically stable.
 
-## Expected Output (Example)
+### Expected Output (Example)
 
 After running:
 
@@ -175,7 +181,7 @@ Batch Size,HF Throughput,vLLM Throughput,HF Avg Latency,vLLM Avg Latency,HF Avg 
 
 Note: exact values can vary slightly by GPU, driver, and background load.
 
-## Outputs
+### Outputs
 
 - CSV benchmark file: `vllm_vs_hf_results.csv`
 - Notebook walkthrough: `vLLM.ipynb`
@@ -184,7 +190,7 @@ Note: exact values can vary slightly by GPU, driver, and background load.
 - Quick launcher: `run_all.sh`
 - Full launcher: `start_project.sh`
 
-## Interpreting Results
+## Why This Matters
 
 - If batch size is 1, HF and vLLM can look closer in latency.
 - As batch size grows, vLLM generally scales better in req/sec.
