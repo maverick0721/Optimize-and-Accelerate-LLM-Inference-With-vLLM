@@ -70,7 +70,7 @@ flowchart TD
 ### Full One-Command Start (Recommended)
 
 ```bash
-./start_project.sh
+./run.sh
 ```
 
 What this does:
@@ -84,13 +84,13 @@ What this does:
 ### Pass Custom Args
 
 ```bash
-./start_project.sh --max-new-tokens 64 --output demo_results.csv
+./run.sh -- --max-new-tokens 64 --output demo_results.csv
 ```
 
-### Fast Path For Preconfigured Environments
+### Fast Path For Preconfigured Local Environments
 
 ```bash
-./run_all.sh --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
+./run.sh --skip-install -- --seed 42 --max-new-tokens 100 --output vllm_vs_hf_results.csv --quiet
 ```
 
 ### Direct Benchmark Command
@@ -111,6 +111,122 @@ python validate_setup.py
 
 If your system requires a specific CUDA wheel for PyTorch, install that wheel first,
 then run `pip install -r requirements.txt`.
+
+### Single Script Modes
+
+Use one script for both local and containerized runs.
+
+```bash
+./run.sh --mode local -- --batch-sizes 1 4 8
+./run.sh --mode docker-nobuild -- --batch-sizes 1
+```
+
+## Docker Usage
+
+This repository includes Docker files so you can run the benchmark in a reproducible containerized environment.
+
+### Prerequisites
+
+- Docker Engine 24+
+- NVIDIA Container Toolkit (for GPU access)
+- NVIDIA driver installed on host
+
+### Build Image
+
+```bash
+docker build -f docker/Dockerfile -t vllm-benchmark .
+```
+
+If you need a different PyTorch CUDA wheel index:
+
+```bash
+docker build -f docker/Dockerfile -t vllm-benchmark \
+       --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121 .
+```
+
+### Run Benchmark (Docker)
+
+```bash
+docker run --rm --gpus all \
+       -v "$(pwd)":/workspace \
+       -w /workspace \
+       vllm-benchmark
+```
+
+### Run With Custom Benchmark Args
+
+```bash
+docker run --rm --gpus all \
+       -v "$(pwd)":/workspace \
+       -w /workspace \
+       vllm-benchmark \
+       python run_benchmark.py --seed 42 --max-new-tokens 64 --output demo_results.csv --quiet
+```
+
+### Docker Compose
+
+```bash
+docker compose -f docker/docker-compose.yml up --build
+```
+
+Override CUDA wheel index when needed:
+
+```bash
+TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121 docker compose -f docker/docker-compose.yml up --build
+```
+
+Run with an alternate command:
+
+```bash
+docker compose -f docker/docker-compose.yml run --rm benchmark \
+       python run_benchmark.py --batch-sizes 1 4 8 --max-new-tokens 64 --output compose_results.csv --quiet
+```
+
+Notes:
+- The project directory is mounted into the container at `/workspace`, so generated CSV files appear in your local folder.
+- Hugging Face cache is persisted through the named volume `hf-cache` in compose.
+- For CPU-only hosts, remove `--gpus all` and set expectations accordingly (this project is designed for CUDA GPUs).
+
+### No-Build Fallback (Restricted Docker Hosts)
+
+Some environments allow `docker run` but block `docker build` due mount or namespace restrictions.
+Use the no-build fallback files in this repository.
+
+Run with helper script:
+
+```bash
+./run.sh --mode docker-nobuild
+```
+
+Run with custom args:
+
+```bash
+./run.sh --mode docker-nobuild -- --batch-sizes 1 4 8 --max-new-tokens 64 --output nobuild_results.csv --quiet
+```
+
+Run with compose no-build service:
+
+```bash
+docker compose -f docker/docker-compose.nobuild.yml up
+```
+
+Override PyTorch wheel index if required:
+
+```bash
+./run.sh --mode docker-nobuild --torch-index-url https://download.pytorch.org/whl/cu121
+```
+
+No-build notes:
+- Dependencies are installed at container startup, so first run is slower than a prebuilt image.
+- The benchmark output CSV is still written to your local project directory.
+- The helper script auto-detects common GPU runtime flags. If detection is wrong, set `DOCKER_GPU_ARG` manually.
+
+Examples:
+
+```bash
+DOCKER_GPU_ARG="--gpus all" ./run.sh --mode docker-nobuild
+DOCKER_GPU_ARG="--device nvidia.com/gpu=all" ./run.sh --mode docker-nobuild
+```
 
 ## Results
 
@@ -147,7 +263,7 @@ With consistent hardware/software, repeated runs should be statistically stable.
 After running:
 
 ```bash
-./start_project.sh --no-venv --skip-install --max-new-tokens 8 --batch-sizes 1 --output sample_results.csv --quiet
+./run.sh --no-venv --skip-install -- --max-new-tokens 8 --batch-sizes 1 --output sample_results.csv --quiet
 ```
 
 You should see a summary similar to:
@@ -187,8 +303,10 @@ Note: exact values can vary slightly by GPU, driver, and background load.
 - Notebook walkthrough: `vLLM.ipynb`
 - CLI benchmark runner: `run_benchmark.py`
 - Setup validator: `validate_setup.py`
-- Quick launcher: `run_all.sh`
-- Full launcher: `start_project.sh`
+- Unified launcher: `run.sh`
+- Container image spec: `docker/Dockerfile`
+- Compose launcher: `docker/docker-compose.yml`
+- Compose no-build fallback: `docker/docker-compose.nobuild.yml`
 
 ## Why This Matters
 

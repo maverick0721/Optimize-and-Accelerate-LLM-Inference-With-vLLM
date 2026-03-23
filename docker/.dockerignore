@@ -1,0 +1,26 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+
+# Git and editor files
+.git/
+.gitignore
+.vscode/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Runtime outputs
+*.csv
+demo_runs/
+.cache/
+
+# Large or generated local caches
+unsloth_compiled_cache/

@@ -1,0 +1,23 @@
+services:
+  benchmark:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu124}
+    image: vllm-benchmark:latest
+    container_name: vllm-benchmark
+    working_dir: /workspace
+    environment:
+      HF_HOME: /workspace/.cache/huggingface
+      TRANSFORMERS_CACHE: /workspace/.cache/huggingface
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ../:/workspace
+      - hf-cache:/workspace/.cache/huggingface
+    gpus: all
+    command: ["python", "run_benchmark.py", "--seed", "42", "--max-new-tokens", "100", "--output", "vllm_vs_hf_results.csv", "--quiet"]
+
+volumes:
+  hf-cache:
