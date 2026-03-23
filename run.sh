@@ -150,8 +150,20 @@ run_docker_nobuild() {
   cd "$PROJECT_DIR"
   mkdir -p "$PROJECT_DIR/.cache/huggingface"
 
+  if [[ "$SKIP_INSTALL" -eq 1 ]]; then
+    echo "[preflight] --skip-install is ignored in docker-nobuild mode."
+  fi
+  if [[ "$NO_VENV" -eq 1 ]]; then
+    echo "[preflight] --no-venv is ignored in docker-nobuild mode."
+  fi
+
+  echo "[preflight] docker-nobuild installs Python dependencies inside the container on every run."
+  echo "[preflight] first run can take several minutes depending on network and wheel downloads."
+
   local gpu_arg
   gpu_arg="$(resolve_docker_gpu_args "$DOCKER_GPU_ARG")"
+
+  echo "[preflight] using Docker GPU args: $gpu_arg"
 
   local bench_cmd=""
   local arg

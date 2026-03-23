@@ -228,6 +228,20 @@ DOCKER_GPU_ARG="--gpus all" ./run.sh --mode docker-nobuild
 DOCKER_GPU_ARG="--device nvidia.com/gpu=all" ./run.sh --mode docker-nobuild
 ```
 
+### Troubleshooting
+
+- `docker build` fails with mount/unshare permission errors:
+       - Some managed or nested environments block build-time namespace operations.
+       - Use `./run.sh --mode docker-nobuild` instead.
+
+- GPU flag errors with Docker runtime:
+       - If your host rejects `--gpus all`, force `DOCKER_GPU_ARG="--device nvidia.com/gpu=all"`.
+       - If your host supports standard Docker GPU mode, use `DOCKER_GPU_ARG="--gpus all"`.
+
+- Slow startup in docker-nobuild mode:
+       - Expected on first run because dependencies are installed in-container each time.
+       - Use local mode (`./run.sh`) for faster iteration after environment setup.
+
 ## Results
 
 ### What Is Measured
